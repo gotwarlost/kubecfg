@@ -45,15 +45,17 @@ import (
 )
 
 const (
-	flagVerbose    = "verbose"
-	flagJpath      = "jpath"
-	flagJUrl       = "jurl"
-	flagExtVar     = "ext-str"
-	flagExtVarFile = "ext-str-file"
-	flagTlaVar     = "tla-str"
-	flagTlaVarFile = "tla-str-file"
-	flagResolver   = "resolve-images"
-	flagResolvFail = "resolve-images-error"
+	flagVerbose     = "verbose"
+	flagJpath       = "jpath"
+	flagJUrl        = "jurl"
+	flagExtVar      = "ext-str"
+	flagExtVarFile  = "ext-str-file"
+	flagTlaVar      = "tla-str"
+	flagTlaVarFile  = "tla-str-file"
+	flagResolver    = "resolve-images"
+	flagResolvFail  = "resolve-images-error"
+	flagExtCode     = "ext-code"
+	flagExtCodeFile = "ext-code-file"
 )
 
 var clientConfig clientcmd.ClientConfig
@@ -67,6 +69,9 @@ func init() {
 	RootCmd.PersistentFlags().StringSliceP(flagExtVar, "V", nil, "Values of external variables")
 	RootCmd.PersistentFlags().StringSlice(flagExtVarFile, nil, "Read external variable from a file")
 	RootCmd.MarkPersistentFlagFilename(flagExtVarFile)
+	RootCmd.PersistentFlags().StringSlice(flagExtCode, nil, "Values of external code variables")
+	RootCmd.PersistentFlags().StringSlice(flagExtCodeFile, nil, "Read external code variable from a file")
+	RootCmd.MarkPersistentFlagFilename(flagExtCodeFile)
 	RootCmd.PersistentFlags().StringSliceP(flagTlaVar, "A", nil, "Values of top level arguments")
 	RootCmd.PersistentFlags().StringSlice(flagTlaVarFile, nil, "Read top level argument from a file")
 	RootCmd.MarkPersistentFlagFilename(flagTlaVarFile)
@@ -261,6 +266,41 @@ func JsonnetVM(cmd *cobra.Command) (*jsonnet.VM, error) {
 			return nil, err
 		}
 		vm.ExtVar(kv[0], string(v))
+	}
+
+	extCodes, err := flags.GetStringSlice(flagExtCode)
+	if err != nil {
+		return nil, err
+	}
+	for _, extCode := range extCodes {
+		kv := strings.SplitN(extCode, "=", 2)
+		switch len(kv) {
+		case 1:
+			v, present := os.LookupEnv(kv[0])
+			if present {
+				vm.ExtCode(kv[0], v)
+			} else {
+				return nil, fmt.Errorf("Missing environment variable: %s", kv[0])
+			}
+		case 2:
+			vm.ExtCode(kv[0], kv[1])
+		}
+	}
+
+	extCodefiles, err := flags.GetStringSlice(flagExtCodeFile)
+	if err != nil {
+		return nil, err
+	}
+	for _, extCode := range extCodefiles {
+		kv := strings.SplitN(extCode, "=", 2)
+		if len(kv) != 2 {
+			return nil, fmt.Errorf("Failed to parse %s: missing '=' in %s", flagExtCodeFile, extCode)
+		}
+		v, err := ioutil.ReadFile(kv[1])
+		if err != nil {
+			return nil, err
+		}
+		vm.ExtCode(kv[0], string(v))
 	}
 
 	tlavars, err := flags.GetStringSlice(flagTlaVar)
